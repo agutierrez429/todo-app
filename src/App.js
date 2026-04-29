@@ -2,56 +2,81 @@ import React, {useState, useEffect} from "react";
 import './App.css';
 import TaskItem from "./TaskItem";
 
+const createTaskId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+const normalizeTasks = (tasks) =>
+  tasks.map((task) => ({
+    ...task,
+    id: task.id || createTaskId()
+  }));
+
 function App() {
   const [taskInput, setTaskInput] = useState("");
   const [tasks, setTasks] = useState(() => {
     const savedTasks = localStorage.getItem("tasks");
-    return savedTasks ? JSON.parse(savedTasks) : [];
+    return savedTasks ? normalizeTasks(JSON.parse(savedTasks)) : [];
   });
+  const [editTaskId, setEditTaskId] = useState(null);
+  const [editText, setEditText] = useState("");
+
   const addTask = () => {
     if (taskInput.trim() === "") 
       return;
 
-    setTasks([...tasks, {text: taskInput, completed: false}]);
+    setTasks((currentTasks) => [
+      ...currentTasks,
+      { id: createTaskId(), text: taskInput, completed: false }
+    ]);
     setTaskInput("");
   }
-  const deleteTask = (taskIndex) => {
-    const updatedTasks = tasks.filter((_, index) => index !== taskIndex);
-    setTasks(updatedTasks);
+  const deleteTask = (taskId) => {
+    setTasks((currentTasks) => currentTasks.filter((task) => task.id !== taskId));
+
+    if (editTaskId === taskId) {
+      setEditTaskId(null);
+      setEditText("");
+    }
   };
   const clearAllTasks = () => {
     setTasks([]);
+    setEditTaskId(null);
+    setEditText("");
   };
-  const toggleComplete = (taskIndex) => {
-    const updatedTasks = tasks.map((task, index) => {
-      if(index === taskIndex){
+  const toggleComplete = (taskId) => {
+    setTasks((currentTasks) => currentTasks.map((task) => {
+      if(task.id === taskId){
         return {...task, completed: !task.completed};
       }
       return task;
-    });
-    setTasks(updatedTasks);
+    }));
   };
-  const [editIndex, setEditIndex] = useState(null);
-  const [editText, setEditText] = useState("");
-  const startEdit = (index) => {
-    setEditIndex(index);
-    setEditText(tasks[index].text);
+  const startEdit = (taskId) => {
+    const taskToEdit = tasks.find((task) => task.id === taskId);
+
+    if (!taskToEdit) {
+      return;
+    }
+
+    setEditTaskId(taskId);
+    setEditText(taskToEdit.text);
   };
   const saveEdit = () => {
-    const updatedTasks = tasks.map((task, index) => {
-      if(index === editIndex){
+    setTasks((currentTasks) => currentTasks.map((task) => {
+      if(task.id === editTaskId){
         return {...task, text: editText};
       }
       return task;
-    });
-    setTasks(updatedTasks);
-    setEditIndex(null);
+    }));
+    setEditTaskId(null);
     setEditText("");
   };
   const [filter, setFilter] = useState("all");
-  const filteredTasks = tasks
-    .map((task, index) => ({ task, originalIndex: index}))
-    .filter(({ task }) => {
+  const taskCounts = {
+    all: tasks.length,
+    active: tasks.filter((task) => !task.completed).length,
+    completed: tasks.filter((task) => task.completed).length
+  };
+  const filteredTasks = tasks.filter((task) => {
       if(filter === "active") return !task.completed;
       if(filter === "completed") return task.completed;
       return true;
@@ -97,18 +122,27 @@ function App() {
         </div>
 
         <div className="filter-group">
-          <button className={filterButtonClass("all")} onClick={() => setFilter("all")}>All</button>
-          <button className={filterButtonClass("active")} onClick={() => setFilter("active")}>Active</button>
-          <button className={filterButtonClass("completed")} onClick={() => setFilter("completed")}>Completed</button>
+          <button className={filterButtonClass("all")} onClick={() => setFilter("all")}>
+            <span>All</span>
+            <span className="filter-count">{taskCounts.all}</span>
+          </button>
+          <button className={filterButtonClass("active")} onClick={() => setFilter("active")}>
+            <span>Active</span>
+            <span className="filter-count">{taskCounts.active}</span>
+          </button>
+          <button className={filterButtonClass("completed")} onClick={() => setFilter("completed")}>
+            <span>Completed</span>
+            <span className="filter-count">{taskCounts.completed}</span>
+          </button>
         </div>
 
         <ul className="task-list">
-          {filteredTasks.map(({ task, originalIndex }) => (
+          {filteredTasks.map((task) => (
             <TaskItem
-              key={originalIndex}
+              key={task.id}
               task={task}
-              index={originalIndex}
-              editIndex={editIndex}
+              taskId={task.id}
+              editTaskId={editTaskId}
               editText={editText}
               setEditText={setEditText}
               toggleComplete={toggleComplete}
